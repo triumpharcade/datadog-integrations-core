@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 import pytest
+
 from datadog_checks.postgres.obfuscation_lookup import ObfuscationLookup
 from datadog_checks.postgres.sqlc_query_name import (
     prepend_sqlc_query_name,

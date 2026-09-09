@@ -11,8 +11,9 @@ from typing import Dict, Optional, Tuple  # noqa: F401
 
 import psycopg
 from cachetools import TTLCache
-from datadog_checks.postgres.config_models import InstanceConfig
 from psycopg.rows import dict_row
+
+from datadog_checks.postgres.config_models import InstanceConfig
 
 try:
     import datadog_agent

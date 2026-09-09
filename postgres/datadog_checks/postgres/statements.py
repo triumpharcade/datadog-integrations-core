@@ -9,6 +9,8 @@ from typing import Tuple
 
 import psycopg
 from cachetools import TTLCache
+from psycopg.rows import dict_row
+
 from datadog_checks.base.utils.common import to_native_string
 from datadog_checks.base.utils.db.sql import compute_sql_signature
 from datadog_checks.base.utils.db.statement_metrics import StatementMetrics
@@ -16,7 +18,6 @@ from datadog_checks.base.utils.db.utils import DBMAsyncJob, default_json_event_e
 from datadog_checks.base.utils.serialization import json
 from datadog_checks.base.utils.tracking import tracked_method
 from datadog_checks.postgres.config_models import InstanceConfig
-from psycopg.rows import dict_row
 
 from .sqlc_query_name import prepend_sqlc_query_name
 from .util import (
