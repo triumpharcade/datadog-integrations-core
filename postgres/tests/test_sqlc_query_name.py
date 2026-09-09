@@ -6,7 +6,7 @@ from unittest import mock
 
 import pytest
 
-from datadog_checks.postgres.obfuscation_lookup import ObfuscationLookup
+from datadog_checks.base.utils.db.query_metrics import ObfuscationResult
 from datadog_checks.postgres.sqlc_query_name import (
     prepend_sqlc_query_name,
     sqlc_query_name,
@@ -15,6 +15,7 @@ from datadog_checks.postgres.sqlc_query_name import (
 )
 from datadog_checks.postgres.statement_samples import PostgresStatementSamples, StatementTruncationState
 from datadog_checks.postgres.statements import PostgresStatementMetrics
+from datadog_checks.postgres.statements_v2 import PostgresStatementMetricsV2
 
 pytestmark = pytest.mark.unit
 
@@ -98,26 +99,28 @@ def test_legacy_metrics_prefixes_query_without_changing_signature_or_metadata() 
     compute_signature.assert_called_once_with(OBFUSCATED_QUERY)
 
 
-def test_v2_lookup_prefixes_query_without_changing_signature_or_metadata() -> None:
-    lookup = ObfuscationLookup(maxsize=10, obfuscate_options='{}')
+@pytest.mark.parametrize('comments, expected_query', [(METADATA['comments'], PREFIXED_QUERY), ([], OBFUSCATED_QUERY)])
+def test_v2_rows_preserve_signature_and_metadata(comments: list[str], expected_query: str):
+    collector = object.__new__(PostgresStatementMetricsV2)
+    obfuscated = ObfuscationResult(
+        obfuscated_query=OBFUSCATED_QUERY,
+        query_signature='original-signature',
+        tables=METADATA['tables'],
+        commands=METADATA['commands'],
+        comments=comments,
+    )
+    rows = collector._assemble_rows(
+        [{'queryid': 1, 'dbid': 2, 'userid': 3, 'datname': 'widgets', 'rolname': 'reader', 'calls': 4}],
+        {(1, 2, 3): obfuscated},
+    )
 
-    with (
-        mock.patch(
-            'datadog_checks.postgres.obfuscation_lookup.obfuscate_sql_with_metadata',
-            return_value=obfuscation_result(),
-        ),
-        mock.patch(
-            'datadog_checks.postgres.obfuscation_lookup.compute_sql_signature',
-            side_effect=lambda query: 'signature:{}'.format(query),
-        ) as compute_signature,
-    ):
-        result = lookup._obfuscate_single('SELECT id FROM widgets WHERE id = 7')
-
-    assert result is not None
-    assert result.obfuscated_query == PREFIXED_QUERY
-    assert result.query_signature == 'signature:{}'.format(OBFUSCATED_QUERY)
-    assert result.comments == METADATA['comments']
-    compute_signature.assert_called_once_with(OBFUSCATED_QUERY)
+    assert len(rows) == 1
+    assert rows[0]['query'] == expected_query
+    assert rows[0]['query_signature'] == 'original-signature'
+    assert rows[0]['dd_comments'] == comments
+    assert rows[0]['dd_tables'] == METADATA['tables']
+    assert rows[0]['dd_commands'] == METADATA['commands']
+    assert rows[0]['calls'] == 4
 
 
 def test_samples_prefix_query_without_changing_signature_or_metadata() -> None:
@@ -142,17 +145,6 @@ def test_samples_prefix_query_without_changing_signature_or_metadata() -> None:
     assert row['query_signature'] == 'signature:{}'.format(OBFUSCATED_QUERY)
     assert row['dd_comments'] == METADATA['comments']
     compute_signature.assert_called_once_with(OBFUSCATED_QUERY)
-
-
-def test_v2_lookup_leaves_query_without_sqlc_header_unchanged() -> None:
-    lookup = ObfuscationLookup(maxsize=10, obfuscate_options='{}')
-    response = obfuscation_result(comments=['-- ordinary comment'])
-
-    with mock.patch('datadog_checks.postgres.obfuscation_lookup.obfuscate_sql_with_metadata', return_value=response):
-        result = lookup._obfuscate_single('SELECT id FROM widgets WHERE id = 7')
-
-    assert result is not None
-    assert result.obfuscated_query == OBFUSCATED_QUERY
 
 
 def test_explain_strips_prefix_before_trimming_leading_set(monkeypatch: pytest.MonkeyPatch) -> None:
