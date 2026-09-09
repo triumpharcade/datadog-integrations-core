@@ -11,9 +11,8 @@ from typing import Dict, Optional, Tuple  # noqa: F401
 
 import psycopg
 from cachetools import TTLCache
-from psycopg.rows import dict_row
-
 from datadog_checks.postgres.config_models import InstanceConfig
+from psycopg.rows import dict_row
 
 try:
     import datadog_agent
@@ -40,6 +39,7 @@ from datadog_checks.base.utils.time import get_timestamp
 from datadog_checks.base.utils.tracking import tracked_method
 from datadog_checks.postgres.explain_parameterized_queries import ExplainParameterizedQueries
 
+from .sqlc_query_name import prepend_sqlc_query_name, strip_sqlc_query_name
 from .util import (
     INSUFFICIENT_PRIVILEGE,
     DatabaseConfigurationError,
@@ -421,9 +421,9 @@ class PostgresStatementSamples(DBMAsyncJob):
                 normalized_row['query_signature'] = compute_sql_signature(backend_type)
             else:
                 statement = obfuscate_sql_with_metadata(row['query'], self._obfuscate_options)
-                obfuscated_query = statement['query']
                 metadata = statement['metadata']
-                normalized_row['query_signature'] = compute_sql_signature(obfuscated_query)
+                obfuscated_query = prepend_sqlc_query_name(statement['query'], metadata.get('comments'))
+                normalized_row['query_signature'] = compute_sql_signature(statement['query'])
                 normalized_row['dd_tables'] = metadata.get('tables', None)
                 normalized_row['dd_commands'] = metadata.get('commands', None)
                 normalized_row['dd_comments'] = metadata.get('comments', None)
@@ -788,6 +788,7 @@ class PostgresStatementSamples(DBMAsyncJob):
         # type: (str, str, str, str) -> Tuple[Optional[Dict], Optional[DBExplainError], Optional[str]]
 
         orig_statement = statement
+        obfuscated_statement = strip_sqlc_query_name(obfuscated_statement)
 
         # remove leading SET statements from our SQL
         if obfuscated_statement[:3].lower() == "set":

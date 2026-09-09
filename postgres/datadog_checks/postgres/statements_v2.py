@@ -25,6 +25,7 @@ from datadog_checks.base.utils.serialization import json
 from datadog_checks.base.utils.tracking import tracked_method
 from datadog_checks.postgres.config_models import InstanceConfig
 
+from .sqlc_query_name import prepend_sqlc_query_name
 from .statements import (
     PG_STAT_STATEMENTS_COUNT_QUERY,
     PG_STAT_STATEMENTS_COUNT_QUERY_LT_9_4,
@@ -393,7 +394,7 @@ class PostgresStatementMetricsV2(DBMAsyncJob):
             out = dict(row)
             out.pop('dbid', None)
             out.pop('userid', None)
-            out['query'] = obf.obfuscated_query
+            out['query'] = prepend_sqlc_query_name(obf.obfuscated_query, obf.comments)
             out['query_signature'] = obf.query_signature
             out['dd_tables'] = obf.tables
             out['dd_commands'] = obf.commands
