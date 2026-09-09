@@ -86,8 +86,13 @@ jobs:
     - name: Run all validations
       env:
         DD_GITHUB_USER: "${{ github.actor }}"
-        DD_GITHUB_TOKEN: "${{ github.repository_owner == 'DataDog' && (steps.octo-sts.outputs.token || secrets.GITHUB_TOKEN) || '' }}"
-      run: ddev validate all "$TARGET"
+        DD_GITHUB_TOKEN: "${{ steps.octo-sts.outputs.token || secrets.GITHUB_TOKEN }}"
+      run: |
+        # ddev posts PR validation comments to DataDog/integrations-core.
+        if [[ "$GITHUB_REPOSITORY_OWNER" != "DataDog" ]]; then
+          export GITHUB_EVENT_NAME=push
+        fi
+        ddev validate all "$TARGET"
 
     - name: Validate QA label outside DataDog
       if: always() && github.event_name == 'pull_request' && github.repository_owner != 'DataDog'

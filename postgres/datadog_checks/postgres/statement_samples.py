@@ -40,7 +40,7 @@ from datadog_checks.base.utils.time import get_timestamp
 from datadog_checks.base.utils.tracking import tracked_method
 from datadog_checks.postgres.explain_parameterized_queries import ExplainParameterizedQueries
 
-from .sqlc_query_name import prepend_sqlc_query_name, strip_sqlc_query_name
+from .sqlc_query_name import prepend_sqlc_query_name, strip_sqlc_header, strip_sqlc_query_name
 from .util import DatabaseConfigurationError, DBExplainError, trim_leading_set_stmts, warning_with_tags
 from .version_utils import V9_6, V10
 
@@ -777,6 +777,7 @@ class PostgresStatementSamples(DBMAsyncJob):
 
         # remove leading SET statements from our SQL
         if obfuscated_statement[:3].lower() == "set":
+            statement = strip_sqlc_header(statement)
             statement = trim_leading_set_stmts(statement)
             obfuscated_statement = trim_leading_set_stmts(obfuscated_statement)
 
