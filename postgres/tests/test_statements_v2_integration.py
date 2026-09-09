@@ -347,6 +347,8 @@ def test_pg_stat_statements_dealloc_v2(aggregator, integration_check, pg_instanc
         with primary_conn.cursor() as cur:
             cur.execute("SELECT pg_current_wal_lsn();")
             target_lsn = cur.fetchone()[0]
+            if isinstance(target_lsn, bytes):
+                target_lsn = target_lsn.decode('ascii')
 
     pg_instance['dbm'] = True
     pg_instance['port'] = PORT_REPLICA2
