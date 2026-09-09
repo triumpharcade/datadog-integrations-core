@@ -1,0 +1,1 @@
+Include sqlc query names in Postgres monitoring statements while preserving query signatures.
