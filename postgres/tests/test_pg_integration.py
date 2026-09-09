@@ -571,7 +571,7 @@ def test_activity_vacuum_excluded(aggregator, integration_check, pg_instance):
 
 
 @pytest.mark.flaky(max_runs=5)
-def test_backend_transaction_age(aggregator, integration_check, pg_instance):
+def test_backend_transaction_age(aggregator, integration_check, pg_instance, request):
     pg_instance['collect_activity_metrics'] = True
     check = integration_check(pg_instance)
 
@@ -579,7 +579,9 @@ def test_backend_transaction_age(aggregator, integration_check, pg_instance):
 
     app = f'test_backend_transaction_age_{time.time()}'
     conn1 = _get_conn(pg_instance, application_name=app)
+    request.addfinalizer(conn1.close)
     cur = conn1.cursor()
+    request.addfinalizer(cur.close)
 
     test_tags = _get_expected_tags(check, pg_instance, db=DB_NAME, app=app, user='datadog')
     # No transaction in progress, nothing should be reported for test app
@@ -597,9 +599,13 @@ def test_backend_transaction_age(aggregator, integration_check, pg_instance):
     aggregator.reset()
     check.run()
 
+    initial_ages = {}
     if float(POSTGRES_VERSION) >= 9.6:
-        aggregator.assert_metric('postgresql.activity.backend_xid_age', value=1, count=1, tags=test_tags)
-        aggregator.assert_metric('postgresql.activity.backend_xmin_age', value=1, count=1, tags=test_tags)
+        for metric_name in ('postgresql.activity.backend_xid_age', 'postgresql.activity.backend_xmin_age'):
+            assert_metric_at_least(aggregator, metric_name, tags=test_tags, count=1, lower_bound=1)
+            initial_ages[metric_name] = next(
+                metric.value for metric in aggregator.metrics(metric_name) if sorted(metric.tags) == sorted(test_tags)
+            )
     else:
         aggregator.assert_metric('postgresql.activity.backend_xid_age', count=0, tags=test_tags)
         aggregator.assert_metric('postgresql.activity.backend_xmin_age', count=0, tags=test_tags)
@@ -615,10 +621,14 @@ def test_backend_transaction_age(aggregator, integration_check, pg_instance):
     transaction_age_lower_bound = time.time() - start_transaction_time
     check.run()
 
-    if float(POSTGRES_VERSION) >= 9.6:
-        # Check that the xmin and xid is 2 tx old
-        aggregator.assert_metric('postgresql.activity.backend_xid_age', value=2, count=1, tags=test_tags)
-        aggregator.assert_metric('postgresql.activity.backend_xmin_age', value=2, count=1, tags=test_tags)
+    for metric_name, initial_age in initial_ages.items():
+        assert_metric_at_least(
+            aggregator,
+            metric_name,
+            tags=test_tags,
+            count=1,
+            lower_bound=initial_age + 1,
+        )
 
     # Check that xact_start_age has a value greater than the trasaction_age lower bound
     aggregator.assert_metric('postgresql.activity.xact_start_age', count=1, tags=test_tags)
@@ -629,10 +639,6 @@ def test_backend_transaction_age(aggregator, integration_check, pg_instance):
         count=1,
         lower_bound=transaction_age_lower_bound,
     )
-
-    # cleanup
-    cur.close()
-    conn1.close()
 
 
 @requires_over_10

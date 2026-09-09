@@ -11,6 +11,7 @@ from datadog_checks.base.utils.db.sql import compute_sql_signature
 from datadog_checks.base.utils.db.utils import obfuscate_sql_with_metadata
 
 from .delta_detector import PgssKey
+from .sqlc_query_name import prepend_sqlc_query_name
 
 logger = logging.getLogger(__name__)
 
@@ -192,7 +193,8 @@ class ObfuscationLookup:
         obfuscated_query = statement['query']
         metadata = statement['metadata']
         return ObfuscationResult(
-            obfuscated_query=obfuscated_query,
+            obfuscated_query=prepend_sqlc_query_name(obfuscated_query, metadata.get('comments')),
+            # Signatures hash the unprefixed SQL so sqlc names never rekey a query.
             query_signature=compute_sql_signature(obfuscated_query),
             tables=metadata.get('tables', None),
             commands=metadata.get('commands', None),

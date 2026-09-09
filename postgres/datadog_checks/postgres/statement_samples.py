@@ -40,6 +40,7 @@ from datadog_checks.base.utils.time import get_timestamp
 from datadog_checks.base.utils.tracking import tracked_method
 from datadog_checks.postgres.explain_parameterized_queries import ExplainParameterizedQueries
 
+from .sqlc_query_name import prepend_sqlc_query_name, strip_sqlc_header, strip_sqlc_query_name
 from .util import DatabaseConfigurationError, DBExplainError, trim_leading_set_stmts, warning_with_tags
 from .version_utils import V9_6, V10
 
@@ -407,17 +408,18 @@ class PostgresStatementSamples(DBMAsyncJob):
 
     def _normalize_row(self, row):
         normalized_row = dict(copy.copy(row))
-        obfuscated_query = None
+        prefixed_query = None
         backend_type = normalized_row.get('backend_type', 'client backend') or 'client backend'
         try:
             if backend_type != 'client backend':
-                obfuscated_query = backend_type
+                prefixed_query = backend_type
                 normalized_row['query_signature'] = compute_sql_signature(backend_type)
             else:
                 statement = obfuscate_sql_with_metadata(row['query'], self._obfuscate_options)
-                obfuscated_query = statement['query']
                 metadata = statement['metadata']
-                normalized_row['query_signature'] = compute_sql_signature(obfuscated_query)
+                prefixed_query = prepend_sqlc_query_name(statement['query'], metadata.get('comments'))
+                # Signatures hash the unprefixed SQL so sqlc names never rekey a query.
+                normalized_row['query_signature'] = compute_sql_signature(statement['query'])
                 normalized_row['dd_tables'] = metadata.get('tables', None)
                 normalized_row['dd_commands'] = metadata.get('commands', None)
                 normalized_row['dd_comments'] = metadata.get('comments', None)
@@ -433,7 +435,7 @@ class PostgresStatementSamples(DBMAsyncJob):
                 hostname=self._check.reported_hostname,
                 raw=True,
             )
-        normalized_row['statement'] = obfuscated_query
+        normalized_row['statement'] = prefixed_query
         return normalized_row
 
     def _get_extra_filters_and_params(self, filter_stale_idle_conn=False):
@@ -782,9 +784,11 @@ class PostgresStatementSamples(DBMAsyncJob):
         # type: (str, str, str, str) -> Tuple[Optional[Dict], Optional[DBExplainError], Optional[str]]
 
         orig_statement = statement
+        obfuscated_statement = strip_sqlc_query_name(obfuscated_statement)
 
         # remove leading SET statements from our SQL
         if obfuscated_statement[:3].lower() == "set":
+            statement = strip_sqlc_header(statement)
             statement = trim_leading_set_stmts(statement)
             obfuscated_statement = trim_leading_set_stmts(obfuscated_statement)
 
