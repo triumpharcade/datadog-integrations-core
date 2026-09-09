@@ -1,6 +1,8 @@
 # (C) Datadog, Inc. 2026-present
 # All rights reserved
 # Licensed under a 3-clause BSD style license (see LICENSE)
+import time
+
 import mock
 import psycopg
 import pytest
@@ -341,6 +343,13 @@ def test_pg_stat_statements_max_warning_v2(
 def test_pg_stat_statements_dealloc_v2(aggregator, integration_check, pg_instance):
     from .common import PORT_REPLICA2, _get_expected_replication_tags
 
+    with _get_superconn(pg_instance) as primary_conn:
+        with primary_conn.cursor() as cur:
+            cur.execute("SELECT pg_current_wal_lsn();")
+            target_lsn = cur.fetchone()[0]
+            if isinstance(target_lsn, bytes):
+                target_lsn = target_lsn.decode('ascii')
+
     pg_instance['dbm'] = True
     pg_instance['port'] = PORT_REPLICA2
     pg_instance['min_collection_interval'] = 1
@@ -355,7 +364,16 @@ def test_pg_stat_statements_dealloc_v2(aggregator, integration_check, pg_instanc
     }
 
     with _get_superconn(pg_instance) as superconn:
+        deadline = time.monotonic() + 10
         with superconn.cursor() as cur:
+            # Wait for primary schema changes to reach the replica before using its extension.
+            while True:
+                cur.execute("SELECT pg_last_wal_replay_lsn() >= %s::pg_lsn;", (target_lsn,))
+                if cur.fetchone()[0]:
+                    break
+                if time.monotonic() >= deadline:
+                    pytest.fail('replica did not replay the pg_stat_statements restore within 10 seconds')
+                time.sleep(0.1)
             cur.execute("select pg_stat_statements_reset();")
 
     check = integration_check(pg_instance)
