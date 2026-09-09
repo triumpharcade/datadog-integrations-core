@@ -7,6 +7,7 @@ import re
 from collections.abc import Iterable
 
 SQLC_NAME_RE = re.compile(r'^\s*--\s*name:\s*(\w{1,128})\s*:', re.ASCII)
+LEADING_SQLC_HEADER_RE = re.compile(r'^\s*--\s*name:\s*\w{1,128}\s*:[^\r\n]*(?:\r?\n|$)', re.ASCII)
 LEADING_SQLC_NAME_RE = re.compile(r'^/\* \w{1,128} \*/ ', re.ASCII)
 
 
@@ -30,3 +31,8 @@ def prepend_sqlc_query_name(obfuscated_query: str, comments: Iterable[str] | Non
 def strip_sqlc_query_name(obfuscated_query: str) -> str:
     """Remove a sqlc query name prefix from an obfuscated query."""
     return LEADING_SQLC_NAME_RE.sub('', obfuscated_query, count=1)
+
+
+def strip_sqlc_header(query: str) -> str:
+    """Remove a leading sqlc header from a query."""
+    return LEADING_SQLC_HEADER_RE.sub('', query, count=1)

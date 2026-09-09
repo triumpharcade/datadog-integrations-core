@@ -10,6 +10,7 @@ from datadog_checks.postgres.obfuscation_lookup import ObfuscationLookup
 from datadog_checks.postgres.sqlc_query_name import (
     prepend_sqlc_query_name,
     sqlc_query_name,
+    strip_sqlc_header,
     strip_sqlc_query_name,
 )
 from datadog_checks.postgres.statement_samples import PostgresStatementSamples, StatementTruncationState
@@ -62,6 +63,15 @@ def test_prefix_and_strip_sqlc_query_name() -> None:
 def test_prefix_leaves_query_without_sqlc_header_unchanged() -> None:
     assert prepend_sqlc_query_name(OBFUSCATED_QUERY, ['-- ordinary comment']) == OBFUSCATED_QUERY
     assert prepend_sqlc_query_name('', [SQLC_HEADER]) == ''
+
+
+def test_strip_sqlc_header_only_removes_a_leading_sqlc_line() -> None:
+    query = '{}\n{}'.format(SQLC_HEADER, OBFUSCATED_QUERY)
+    ordinary_comment = '-- ordinary comment\n{}'.format(query)
+
+    assert strip_sqlc_header(query) == OBFUSCATED_QUERY
+    assert strip_sqlc_header(ordinary_comment) == ordinary_comment
+    assert strip_sqlc_header(OBFUSCATED_QUERY) == OBFUSCATED_QUERY
 
 
 def test_legacy_metrics_prefixes_query_without_changing_signature_or_metadata() -> None:
@@ -156,7 +166,7 @@ def test_explain_strips_prefix_before_trimming_leading_set(monkeypatch: pytest.M
     collector._explain_parameterized_queries = SimpleNamespace(_is_parameterized_query=mock.Mock(return_value=False))
     collector._run_explain = mock.Mock(return_value={'Plan': {}})
 
-    raw_query = 'SET LOCAL statement_timeout = 1000; SELECT id FROM widgets'
+    raw_query = '{}\nSET LOCAL statement_timeout = 1000; SELECT id FROM widgets'.format(SQLC_HEADER)
     obfuscated_query = '/* GetWidgets */ SET LOCAL statement_timeout = ?; SELECT id FROM widgets'
 
     plan, error, message = collector._run_explain_safe('widgets', raw_query, obfuscated_query, 'signature')
