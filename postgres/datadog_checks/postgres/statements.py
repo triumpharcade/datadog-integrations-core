@@ -19,6 +19,7 @@ from datadog_checks.base.utils.serialization import json
 from datadog_checks.base.utils.tracking import tracked_method
 from datadog_checks.postgres.config_models import InstanceConfig
 
+from .sqlc_query_name import prepend_sqlc_query_name
 from .util import (
     DatabaseConfigurationError,
     parse_shared_preload_libraries,
@@ -533,11 +534,11 @@ class PostgresStatementMetrics(DBMAsyncJob):
                     self._log.debug("Failed to obfuscate query | err=[%s]", e)
                 continue
 
+            metadata = statement['metadata']
             obfuscated_query = statement['query']
-            normalized_row['query'] = obfuscated_query
+            normalized_row['query'] = prepend_sqlc_query_name(obfuscated_query, metadata.get('comments'))
             normalized_row['query_signature'] = compute_sql_signature(obfuscated_query)
 
-            metadata = statement['metadata']
             normalized_row['dd_tables'] = metadata.get('tables', None)
             normalized_row['dd_commands'] = metadata.get('commands', None)
             normalized_row['dd_comments'] = metadata.get('comments', None)

@@ -70,8 +70,12 @@ jobs:
         ddev config set orgs.ci.dd_url "https://app.datadoghq.com"
         ddev config set org ci
 
+    - name: Skip DataDog QA label validation outside DataDog
+      if: github.repository_owner != 'DataDog'
+      run: sed -i '/"qa-label"/d' .ddev/config.toml
+
     - name: Get GitHub token for PR comments
-      if: github.event_name == 'pull_request'
+      if: github.event_name == 'pull_request' && github.repository_owner == 'DataDog'
       uses: DataDog/dd-octo-sts-action@96a25462dbcb10ebf0bfd6e2ccc917d2ab235b9a # v1.0.4
       id: octo-sts
       continue-on-error: true
@@ -83,4 +87,18 @@ jobs:
       env:
         DD_GITHUB_USER: "${{ github.actor }}"
         DD_GITHUB_TOKEN: "${{ steps.octo-sts.outputs.token || secrets.GITHUB_TOKEN }}"
-      run: ddev validate all "$TARGET"
+      run: |
+        # ddev posts PR validation comments to DataDog/integrations-core.
+        if [[ "$GITHUB_REPOSITORY_OWNER" != "DataDog" ]]; then
+          export GITHUB_EVENT_NAME=push
+        fi
+        ddev validate all "$TARGET"
+
+    - name: Validate QA label outside DataDog
+      if: always() && github.event_name == 'pull_request' && github.repository_owner != 'DataDog'
+      run: |
+        label_count=$(jq '[.pull_request.labels[].name | select(. == "qa/required" or . == "qa/skip-qa")] | unique | length' "$GITHUB_EVENT_PATH")
+        if (( label_count != 1 )); then
+          echo "::error::Pull request must have exactly one Agent-release QA label: qa/required or qa/skip-qa."
+          exit 1
+        fi
