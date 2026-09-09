@@ -194,6 +194,7 @@ class ObfuscationLookup:
         metadata = statement['metadata']
         return ObfuscationResult(
             obfuscated_query=prepend_sqlc_query_name(obfuscated_query, metadata.get('comments')),
+            # Signatures hash the unprefixed SQL so sqlc names never rekey a query.
             query_signature=compute_sql_signature(obfuscated_query),
             tables=metadata.get('tables', None),
             commands=metadata.get('commands', None),

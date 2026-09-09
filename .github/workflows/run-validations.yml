@@ -70,10 +70,6 @@ jobs:
         ddev config set orgs.ci.dd_url "https://app.datadoghq.com"
         ddev config set org ci
 
-    - name: Skip DataDog QA label validation outside DataDog
-      if: github.repository_owner != 'DataDog'
-      run: sed -i '/"qa-label"/d' .ddev/config.toml
-
     - name: Get GitHub token for PR comments
       if: github.event_name == 'pull_request' && github.repository_owner == 'DataDog'
       uses: DataDog/dd-octo-sts-action@96a25462dbcb10ebf0bfd6e2ccc917d2ab235b9a # v1.0.4
@@ -88,7 +84,7 @@ jobs:
         DD_GITHUB_USER: "${{ github.actor }}"
         DD_GITHUB_TOKEN: "${{ steps.octo-sts.outputs.token || secrets.GITHUB_TOKEN }}"
       run: |
-        # ddev posts PR validation comments to DataDog/integrations-core.
+        # The push override substitutes for ddev's PR comment and qa-label validation outside DataDog.
         if [[ "$GITHUB_REPOSITORY_OWNER" != "DataDog" ]]; then
           export GITHUB_EVENT_NAME=push
         fi

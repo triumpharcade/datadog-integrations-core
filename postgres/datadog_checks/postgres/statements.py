@@ -537,6 +537,7 @@ class PostgresStatementMetrics(DBMAsyncJob):
             metadata = statement['metadata']
             obfuscated_query = statement['query']
             normalized_row['query'] = prepend_sqlc_query_name(obfuscated_query, metadata.get('comments'))
+            # Signatures hash the unprefixed SQL so sqlc names never rekey a query.
             normalized_row['query_signature'] = compute_sql_signature(obfuscated_query)
 
             normalized_row['dd_tables'] = metadata.get('tables', None)

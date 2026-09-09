@@ -181,3 +181,30 @@ def test_explain_strips_prefix_before_trimming_leading_set(monkeypatch: pytest.M
         'SELECT id FROM widgets',
     )
     collector._get_truncation_state.assert_called_once_with(4096, raw_query, 'signature')
+
+
+def test_parameterized_explain_receives_unprefixed_obfuscated_statement(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv('DD_DISABLE_TRACKED_METHOD', 'true')
+    collector = object.__new__(PostgresStatementSamples)
+    collector._config = SimpleNamespace(query_samples=SimpleNamespace(explain_parameterized_queries=True))
+    collector._can_explain_statement = mock.Mock(return_value=True)
+    collector._get_track_activity_query_size = mock.Mock(return_value=4096)
+    collector._get_truncation_state = mock.Mock(return_value=StatementTruncationState.not_truncated)
+    collector._get_db_explain_setup_state_cached = mock.Mock(return_value=(None, None))
+    collector._explain_errors_cache = {}
+    collector._run_explain = mock.Mock()
+    explain_statement = mock.Mock(return_value=({'Plan': {}}, None, None))
+    collector._explain_parameterized_queries = SimpleNamespace(
+        _is_parameterized_query=mock.Mock(return_value=True),
+        explain_statement=explain_statement,
+    )
+
+    raw_query = '{}\nSELECT id FROM widgets WHERE id = $1'.format(SQLC_HEADER)
+
+    plan, error, message = collector._run_explain_safe('widgets', raw_query, PREFIXED_QUERY, 'signature')
+
+    assert (plan, error, message) == ({'Plan': {}}, None, None)
+    collector._run_explain.assert_not_called()
+    explain_statement.assert_called_once_with('widgets', raw_query, OBFUSCATED_QUERY, 'signature')
+    assert '/* GetWidgets */ ' not in explain_statement.call_args.args[2]
+    assert collector._explain_errors_cache == {}

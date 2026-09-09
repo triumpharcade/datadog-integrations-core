@@ -408,16 +408,17 @@ class PostgresStatementSamples(DBMAsyncJob):
 
     def _normalize_row(self, row):
         normalized_row = dict(copy.copy(row))
-        obfuscated_query = None
+        prefixed_query = None
         backend_type = normalized_row.get('backend_type', 'client backend') or 'client backend'
         try:
             if backend_type != 'client backend':
-                obfuscated_query = backend_type
+                prefixed_query = backend_type
                 normalized_row['query_signature'] = compute_sql_signature(backend_type)
             else:
                 statement = obfuscate_sql_with_metadata(row['query'], self._obfuscate_options)
                 metadata = statement['metadata']
-                obfuscated_query = prepend_sqlc_query_name(statement['query'], metadata.get('comments'))
+                prefixed_query = prepend_sqlc_query_name(statement['query'], metadata.get('comments'))
+                # Signatures hash the unprefixed SQL so sqlc names never rekey a query.
                 normalized_row['query_signature'] = compute_sql_signature(statement['query'])
                 normalized_row['dd_tables'] = metadata.get('tables', None)
                 normalized_row['dd_commands'] = metadata.get('commands', None)
@@ -434,7 +435,7 @@ class PostgresStatementSamples(DBMAsyncJob):
                 hostname=self._check.reported_hostname,
                 raw=True,
             )
-        normalized_row['statement'] = obfuscated_query
+        normalized_row['statement'] = prefixed_query
         return normalized_row
 
     def _get_extra_filters_and_params(self, filter_stale_idle_conn=False):
