@@ -19,6 +19,7 @@ from datadog_checks.base.utils.serialization import json
 from datadog_checks.base.utils.tracking import tracked_method
 from datadog_checks.postgres.config_models import InstanceConfig
 
+from .function_labels import FunctionLabelCatalog
 from .sqlc_query_name import prepend_sqlc_query_name
 from .util import (
     DatabaseConfigurationError,
@@ -124,7 +125,7 @@ PG_STAT_STATEMENTS_TAG_COLUMNS = frozenset(
     }
 )
 
-PG_STAT_STATEMENTS_OPTIONAL_COLUMNS = frozenset({'queryid'})
+PG_STAT_STATEMENTS_OPTIONAL_COLUMNS = frozenset({'queryid', 'toplevel'})
 
 PG_STAT_ALL_DESIRED_COLUMNS = (
     PG_STAT_STATEMENTS_METRICS_COLUMNS | PG_STAT_STATEMENTS_TAG_COLUMNS | PG_STAT_STATEMENTS_OPTIONAL_COLUMNS
@@ -182,6 +183,7 @@ class PostgresStatementMetrics(DBMAsyncJob):
         obfuscate_options['return_json_metadata'] = self._config.obfuscator_options.collect_metadata
         obfuscate_options['dbms'] = 'postgresql'
         self._obfuscate_options = to_native_string(json.dumps(obfuscate_options))
+        self._function_labels = FunctionLabelCatalog(self._check, self._obfuscate_options, self._log)
         # full_statement_text_cache: limit the ingestion rate of full statement text events per query_signature
         self._full_statement_text_cache = TTLCache(
             maxsize=config.query_metrics.full_statement_text_cache_max_size,
@@ -191,6 +193,7 @@ class PostgresStatementMetrics(DBMAsyncJob):
     def _shutdown(self):
         self._check = None
         self._full_statement_text_cache = None
+        self._function_labels = None
         self._state = None
 
     def _execute_query(self, query, params=(), binary=False, row_factory=None) -> Tuple[list, list]:
@@ -325,6 +328,7 @@ class PostgresStatementMetrics(DBMAsyncJob):
                 return []
 
             desired_columns = PG_STAT_ALL_DESIRED_COLUMNS
+            self._function_labels.set_enabled(self._check.version >= V14 and 'toplevel' in available_columns)
 
             if self._check.pg_settings.get("track_io_timing") != "on":
                 desired_columns -= PG_STAT_STATEMENTS_TIMING_COLUMNS
@@ -545,6 +549,8 @@ class PostgresStatementMetrics(DBMAsyncJob):
             normalized_row['dd_comments'] = metadata.get('comments', None)
             normalized_rows.append(normalized_row)
 
+        if self._function_labels.enrich(normalized_rows):
+            self._full_statement_text_cache.clear()
         return normalized_rows
 
     def _rows_to_fqt_events(self, rows):

@@ -9,6 +9,7 @@ from unittest import mock
 import pytest
 from semver import VersionInfo
 
+from datadog_checks.base.utils.db.sql import compute_sql_signature
 from datadog_checks.postgres import PostgreSql
 from datadog_checks.postgres.config import build_config
 from datadog_checks.postgres.delta_detector import DeltaDetector
@@ -117,6 +118,25 @@ class TestDeltaDetector:
         assert len(result.derivative_rows) == 1
         assert result.derivative_rows[0]['calls'] == 5
         assert result.derivative_rows[0]['rows'] == 15
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        'levels, expected',
+        [
+            pytest.param([False, False], False, id='nested_only'),
+            pytest.param([False, True], None, id='nested_and_top_level'),
+            pytest.param([False, None], None, id='nested_and_unknown'),
+        ],
+    )
+    def test_duplicate_queryid_rows_preserve_conservative_toplevel(
+        self, levels: list[bool | None], expected: bool | None
+    ) -> None:
+        dd = DeltaDetector(metric_columns=METRIC_COLS, execution_indicators=frozenset({'calls'}))
+        dd.compute([self._make_row(101, calls=10, toplevel=False)])
+        result = dd.compute(
+            [self._make_row(101, calls=8, toplevel=levels[0]), self._make_row(101, calls=7, toplevel=levels[1])]
+        )
+        assert result.derivative_rows[0]['toplevel'] is expected
 
     def test_reset_clears_state(self):
         dd = DeltaDetector(metric_columns=METRIC_COLS, execution_indicators=frozenset({'calls'}))
@@ -392,6 +412,61 @@ class TestPostgresStatementMetricsV2:
         with mock.patch.object(v2, '_fetch_query_texts', return_value={}):
             v2._resolve_obfuscations(set(), {ddignore_key})
         assert ddignore_key not in v2._obfuscation_lookup._ignored_keys
+
+    @pytest.mark.unit
+    def test_cached_obfuscation_can_receive_function_label_without_rekeying(self) -> None:
+        v2 = self._make()
+        key = (1, 1, 1)
+        v2._obfuscation_lookup.populate({key: 'SELECT 1'})
+        with mock.patch.object(v2, '_fetch_query_texts') as fetch:
+            obfuscations = v2._resolve_obfuscations({key}, set())
+        fetch.assert_not_called()
+        expected_query = obfuscations[key].obfuscated_query
+        expected_signature = obfuscations[key].query_signature
+
+        rows = v2._assemble_rows(
+            [
+                {
+                    'queryid': 1,
+                    'dbid': 1,
+                    'userid': 1,
+                    'datname': 'main',
+                    'rolname': 'app',
+                    'calls': 1,
+                    'toplevel': False,
+                }
+            ],
+            obfuscations,
+        )
+        v2._function_labels._database = 'main'
+        v2._function_labels._labels = {rows[0]['query']: '/* function: app.one */'}
+        with mock.patch.object(v2._function_labels, '_refresh_if_needed', return_value=False):
+            v2._function_labels.enrich(rows)
+
+        assert rows[0]['query'] == '/* function: app.one */ {}'.format(expected_query)
+        assert rows[0]['query_signature'] == expected_signature
+
+    @pytest.mark.unit
+    def test_merge_prefers_sqlc_name_over_function_label_candidate(self) -> None:
+        signature = compute_sql_signature('SELECT ?')
+        unnamed = {
+            'query_signature': signature,
+            'query': 'SELECT ?',
+            'datname': 'main',
+            'rolname': 'app',
+            'dd_comments': [],
+            'calls': 1,
+            'toplevel': False,
+        }
+        named = {
+            **unnamed,
+            'query': '/* FindOne */ SELECT ?',
+            'dd_comments': ['-- name: FindOne :one'],
+        }
+
+        merged = PostgresStatementMetricsV2._merge_by_query_signature([unnamed, named])
+        assert merged[0]['query'] == '/* FindOne */ SELECT ?'
+        assert merged[0]['dd_comments'] == ['-- name: FindOne :one']
 
     # --- execute query cancel event ---
 

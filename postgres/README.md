@@ -8,6 +8,8 @@ The Postgres integration provides health and performance metrics for your Postgr
 
 Enable [Database Monitoring][28] (DBM) for enhanced insights into query performance and database health. In addition to the standard integration, Datadog DBM provides query-level metrics, live and historical query snapshots, wait event analysis, database load, query explain plans, and blocking query insights.
 
+For PostgreSQL 14 and later, query metrics can add a `/* function: schema.name */` hint to a nested statement when its normalized text uniquely matches one SQL-language function body in the Agent's connected database. This is a bounded, best-effort catalog match because PostgreSQL does not report a parent function OID with `pg_stat_statements` rows. It skips PL/pgSQL, multi-statement and parsed `prosqlbody` functions, ambiguous normalized bodies, unsafe identifiers, and statements also seen at top level. A sqlc query name takes precedence over the function hint.
+
 Postgres versions 9.6-18 are supported.
 
 **Minimum Agent version:** 6.0.0
