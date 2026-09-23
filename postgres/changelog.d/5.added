@@ -1,0 +1,1 @@
+Add inferred SQL function names to nested PostgreSQL query metrics without changing query signatures.
