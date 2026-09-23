@@ -66,6 +66,8 @@ jobs:
       repo: core
       pytest-args: '-m "not flaky"'
       context: fork-schedule
+      # Run all Postgres environments sequentially, unlike the upstream job matrix.
+      step-timeout-minutes: 120
     permissions:
       contents: read
       id-token: write

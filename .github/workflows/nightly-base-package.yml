@@ -45,3 +45,5 @@ jobs:
       minimum-base-package: true
       pytest-args: '-m "not flaky"'
       context: fork-nightly-base-package
+      # Run all Postgres environments sequentially, unlike the upstream job matrix.
+      step-timeout-minutes: 120
