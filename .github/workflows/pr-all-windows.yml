@@ -23,6 +23,7 @@ concurrency:
 
 jobs:
   test:
+    if: github.repository_owner == 'DataDog'
     uses: ./.github/workflows/test-all-windows.yml
 
     permissions:
@@ -42,7 +43,7 @@ jobs:
   save-event:
     needs:
       - test
-    if: success() || failure()
+    if: github.repository_owner == 'DataDog' && (success() || failure())
 
     uses: ./.github/workflows/save-event.yml
 
@@ -50,6 +51,7 @@ jobs:
     needs:
       - test
     if: >
+      github.repository_owner == 'DataDog' &&
       !github.event.repository.private &&
       (success() || failure())
     runs-on: ubuntu-latest

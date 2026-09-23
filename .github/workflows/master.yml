@@ -27,9 +27,11 @@ on:
 
 jobs:
   cache:
+    if: github.event_name != 'schedule' || github.repository_owner == 'DataDog'
     uses: ./.github/workflows/cache-shared-deps.yml
 
   test:
+    if: github.event_name != 'schedule' || github.repository_owner == 'DataDog'
     needs:
       - cache
 
@@ -53,11 +55,28 @@ jobs:
       # needed for dd-sts in test-target.yml
       id-token: write
 
+  fork-postgres-test:
+    if: github.event_name == 'schedule' && github.repository_owner != 'DataDog'
+    uses: ./.github/workflows/test-target.yml
+    with:
+      job-name: Postgres
+      target: postgres
+      platform: linux
+      runner: '["ubuntu-22.04"]'
+      repo: core
+      pytest-args: '-m "not flaky"'
+      context: fork-schedule
+      # Run all Postgres environments sequentially, unlike the upstream job matrix.
+      step-timeout-minutes: 120
+    permissions:
+      contents: read
+      id-token: write
+
   publish-test-results:
     needs:
       - test
 
-    if: success() || failure()
+    if: github.repository_owner == 'DataDog' && (success() || failure())
     concurrency:
       group: test-results
 
@@ -73,6 +92,7 @@ jobs:
     needs:
       - test
     if: >
+      github.repository_owner == 'DataDog' &&
       !github.event.repository.private &&
       (success() || failure())
     runs-on: ubuntu-latest

@@ -24,6 +24,7 @@ concurrency:
 
 jobs:
   test:
+    if: github.repository_owner == 'DataDog'
     uses: ./.github/workflows/test-all.yml
 
     permissions:
@@ -42,10 +43,59 @@ jobs:
 
     secrets: inherit
 
+  fork-postgres-matrix:
+    if: github.repository_owner != 'DataDog'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    outputs:
+      matrix: ${{ steps.compute.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+      - name: Compute Postgres matrix
+        id: compute
+        shell: python
+        env:
+          PYTHONPATH: ddev/src
+        run: |
+          import json
+          import os
+          from pathlib import Path
+
+          from ddev.utils.scripts.ci_matrix import construct_job_matrix
+
+          matrix = construct_job_matrix(Path.cwd(), ['postgres'])
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write(f'matrix={json.dumps(matrix)}\n')
+
+  fork-postgres-test:
+    if: github.repository_owner != 'DataDog'
+    needs: fork-postgres-matrix
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.fork-postgres-matrix.outputs.matrix) }}
+    uses: ./.github/workflows/test-target.yml
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      job-name: Postgres
+      target: ${{ matrix.target }}
+      target-env: ${{ matrix.target-env }}
+      platform: ${{ matrix.platform }}
+      runner: ${{ toJson(matrix.runner) }}
+      repo: core
+      context: pr
+      pytest-args: '-m "not flaky"'
+
   save-event:
     needs:
       - test
-    if: success() || failure()
+    if: github.repository_owner == 'DataDog' && (success() || failure())
 
     uses: ./.github/workflows/save-event.yml
 
@@ -53,6 +103,7 @@ jobs:
     needs:
       - test
     if: >
+      github.repository_owner == 'DataDog' &&
       !github.event.repository.private &&
       (success() || failure())
     runs-on: ubuntu-latest
