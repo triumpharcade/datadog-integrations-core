@@ -79,6 +79,9 @@ def test_legacy_metrics_prefixes_query_without_changing_signature_or_metadata() 
     collector._obfuscate_options = '{}'
     collector._config = SimpleNamespace(log_unobfuscated_queries=False)
     collector._log = mock.Mock()
+    collector._function_labels = mock.Mock()
+    collector._function_labels.enrich.return_value = False
+    collector._full_statement_text_cache = {}
 
     with (
         mock.patch(

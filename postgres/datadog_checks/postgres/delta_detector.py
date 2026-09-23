@@ -40,6 +40,8 @@ class DeltaDetector:
                 for col in self._metric_columns:
                     if col in row:
                         current[key][col] = current[key].get(col, 0) + row[col]
+                if current[key].get('toplevel') is not False or row.get('toplevel') is not False:
+                    current[key]['toplevel'] = None
             else:
                 current[key] = row
 

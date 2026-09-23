@@ -18,7 +18,9 @@ from datadog_checks.base.utils.tracking import tracked_method
 from datadog_checks.postgres.config_models import InstanceConfig
 
 from .delta_detector import DeltaDetector, PgssKey
+from .function_labels import FunctionLabelCatalog
 from .obfuscation_lookup import ObfuscationLookup, ObfuscationResult
+from .sqlc_query_name import sqlc_query_name
 from .statements import (
     PG_STAT_STATEMENTS_COUNT_QUERY,
     PG_STAT_STATEMENTS_COUNT_QUERY_LT_9_4,
@@ -67,7 +69,7 @@ LIGHTWEIGHT_REQUIRED_COLUMNS = frozenset({'queryid', 'userid', 'dbid', 'calls'})
 LIGHTWEIGHT_TAG_COLUMNS = frozenset({'datname', 'rolname'})
 
 LIGHTWEIGHT_DESIRED_COLUMNS = (
-    LIGHTWEIGHT_REQUIRED_COLUMNS | LIGHTWEIGHT_TAG_COLUMNS | PG_STAT_STATEMENTS_METRICS_COLUMNS
+    LIGHTWEIGHT_REQUIRED_COLUMNS | LIGHTWEIGHT_TAG_COLUMNS | PG_STAT_STATEMENTS_METRICS_COLUMNS | {'toplevel'}
 )
 
 
@@ -127,6 +129,7 @@ class PostgresStatementMetricsV2(DBMAsyncJob):
             obfuscate_options=obfuscate_options_str,
             log_unobfuscated_queries=config.log_unobfuscated_queries,
         )
+        self._function_labels = FunctionLabelCatalog(self._check, obfuscate_options_str, self._log)
 
         self._full_statement_text_cache = TTLCache(
             maxsize=config.query_metrics.full_statement_text_cache_max_size,
@@ -138,6 +141,7 @@ class PostgresStatementMetricsV2(DBMAsyncJob):
         self._check = None
         self._full_statement_text_cache = None
         self._delta_detector = None
+        self._function_labels = None
         self._obfuscation_lookup = None
 
     # -- Database helpers ------------------------------------------------
@@ -253,6 +257,7 @@ class PostgresStatementMetricsV2(DBMAsyncJob):
     def _load_lightweight_snapshot(self) -> list[dict]:
         try:
             available_columns = set(self._get_pg_stat_statements_columns())
+            self._function_labels.set_enabled(self._check.version >= V14 and 'toplevel' in available_columns)
             missing = LIGHTWEIGHT_REQUIRED_COLUMNS - available_columns
             if missing:
                 self._check.warning(
@@ -407,6 +412,11 @@ class PostgresStatementMetricsV2(DBMAsyncJob):
                 for col in metrics:
                     if col in row:
                         merged[key][col] = merged[key].get(col, 0) + row[col]
+                if merged[key].get('toplevel') is not False or row.get('toplevel') is not False:
+                    merged[key]['toplevel'] = None
+                if sqlc_query_name(row.get('dd_comments')) and not sqlc_query_name(merged[key].get('dd_comments')):
+                    merged[key]['query'] = row['query']
+                    merged[key]['dd_comments'] = row['dd_comments']
             else:
                 merged[key] = row
         return list(merged.values())
@@ -480,6 +490,8 @@ class PostgresStatementMetricsV2(DBMAsyncJob):
 
         obfuscations = self._resolve_obfuscations(delta.changed_pgss_keys, delta.vanished_pgss_keys)
         rows = self._assemble_rows(delta.derivative_rows, obfuscations)
+        if self._function_labels.enrich(rows):
+            self._full_statement_text_cache.clear()
         self._log.debug(
             "collect: snapshot=%d derivative=%d obfuscated=%d output=%d",
             len(snapshot_rows),
