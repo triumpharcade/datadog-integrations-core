@@ -54,6 +54,13 @@ DD_PROFILING_ENABLED="true"
 DD_SITE="datadoghq.com"
 DD_API_KEY="$DD_API_KEY_SECRET"
 
+if [[ "${INPUT_IS_FORK:-false}" == 'true' ]]; then
+  DD_TRACE_ANALYTICS_ENABLED="false"
+  DD_CIVISIBILITY_ENABLED="false"
+  DD_CIVISIBILITY_AGENTLESS_ENABLED="false"
+  DD_PROFILING_ENABLED="false"
+fi
+
 # Prefix for artifact names when using minimum base package
 if [[ "${INPUT_MINIMUM_BASE_PACKAGE:-}" == 'true' ]]; then
   MINIMUM_BASE_PACKAGE_PREFIX="minimum-base-package-"

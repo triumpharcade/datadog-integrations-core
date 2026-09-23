@@ -9,6 +9,7 @@ on:
 
 jobs:
   test:
+    if: github.repository_owner == 'DataDog'
     uses: ./.github/workflows/test-all-windows.yml
     with:
       repo: core

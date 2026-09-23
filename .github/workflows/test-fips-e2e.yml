@@ -28,6 +28,7 @@ defaults:
 
 jobs:
   run:
+    if: github.event_name != 'schedule' || github.repository_owner == 'DataDog'
     name: "Test FIPS"
     runs-on: ["ubuntu-22.04"]
 

@@ -8,6 +8,7 @@ on:
 
 jobs:
   upgrade_python_version:
+    if: github.event_name != 'schedule' || github.repository_owner == 'DataDog'
     name: Upgrade Python version
     runs-on: ubuntu-latest
     permissions:

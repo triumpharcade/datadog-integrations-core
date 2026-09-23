@@ -20,6 +20,7 @@ defaults:
 
 jobs:
   find-new-integrations:
+    if: github.repository_owner == 'DataDog'
     name: Find unclaimed PyPI packages
     runs-on: ubuntu-latest
 
@@ -58,7 +59,7 @@ jobs:
   publish:
     name: Publish ${{ matrix.package }}
     needs: find-new-integrations
-    if: needs.find-new-integrations.outputs.packages != '[]'
+    if: github.repository_owner == 'DataDog' && needs.find-new-integrations.outputs.packages != '[]'
     runs-on: ubuntu-latest
 
     environment: publish-pypi

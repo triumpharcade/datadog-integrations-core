@@ -14,9 +14,11 @@ on:
 
 jobs:
   cache:
+    if: github.event_name != 'schedule' || github.repository_owner == 'DataDog'
     uses: ./.github/workflows/cache-shared-deps.yml
 
   test:
+    if: github.event_name != 'schedule' || github.repository_owner == 'DataDog'
     needs:
     - cache
 
@@ -44,7 +46,7 @@ jobs:
   publish-test-results:
     needs:
     - test
-    if: success() || failure()
+    if: (github.event_name != 'schedule' || github.repository_owner == 'DataDog') && (success() || failure())
     concurrency:
       group: test-results
 

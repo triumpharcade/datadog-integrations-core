@@ -12,6 +12,7 @@ on:
 
 jobs:
   test:
+    if: github.event_name != 'schedule' || github.repository_owner == 'DataDog'
     uses: ./.github/workflows/test-all.yml
 
     permissions:
@@ -28,3 +29,19 @@ jobs:
       pytest-args: '-m "not flaky"'
       context: "nightly-base-package"
     secrets: inherit
+
+  fork-postgres-test:
+    if: github.event_name == 'schedule' && github.repository_owner != 'DataDog'
+    uses: ./.github/workflows/test-target.yml
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      job-name: Minimum base package Postgres
+      target: postgres
+      platform: linux
+      runner: '["ubuntu-22.04"]'
+      repo: core
+      minimum-base-package: true
+      pytest-args: '-m "not flaky"'
+      context: fork-nightly-base-package
