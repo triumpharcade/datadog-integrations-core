@@ -1,1 +1,1 @@
-Raise the minimum `virtualenv` version to 21.14.7 to address CVE-2026-113725.
+Raise the minimum `virtualenv` version to 21.14.7 to address CVE-2026-113725, and the minimum `hatch` version to 1.16.5, the first release that works with virtualenv 21.
