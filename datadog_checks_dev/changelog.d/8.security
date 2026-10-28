@@ -1,0 +1,1 @@
+Raise the minimum `virtualenv` version to 21.14.7 to address CVE-2026-113725.
