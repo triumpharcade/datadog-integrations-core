@@ -1,0 +1,1 @@
+Raise the minimum `virtualenv` version to 21.14.9 to pick up the fix for CVE-2026-113721 (GHSA-558c-9hv2-4prj).
