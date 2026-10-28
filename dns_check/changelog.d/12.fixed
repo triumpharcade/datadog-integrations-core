@@ -1,0 +1,1 @@
+Bump dnspython to 2.9.0 to fix CVE-2026-114605.
