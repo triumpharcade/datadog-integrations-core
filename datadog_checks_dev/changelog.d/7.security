@@ -1,0 +1,1 @@
+Raise the minimum `virtualenv` version to 21.14.9 to pick up the fixes for CVE-2026-113720, CVE-2026-113721, CVE-2026-113723 and CVE-2026-113725.
