@@ -57,7 +57,7 @@ cli = [
     "codespell",
     "colorama",
     "datamodel-code-generator~=0.25.6",
-    "hatch>=1.5.0",
+    "hatch>=1.16.5",
     "in-toto==2.0.0",
     "jsonschema",
     "markdown",
@@ -90,7 +90,7 @@ cli = [
     # https://github.com/twisted/towncrier/issues/641
     "towncrier==23.11.0",
     "twine>=7.0.0",
-    "virtualenv>=20.26.1",
+    "virtualenv>=21.14.7",
     # TODO: Remove once every check has a pyproject.toml
 ]
 
