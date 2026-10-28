@@ -12,7 +12,7 @@ cm-client==45.0.4
 confluent-kafka==2.13.2
 cryptography==50.0.0
 ddtrace==4.13.2
-dnspython==2.8.0
+dnspython==2.9.0
 fastavro==1.12.2
 foundationdb==6.3.25
 hazelcast-python-client==5.7.0
