@@ -48,7 +48,7 @@ dynamic = [
 
 [project.optional-dependencies]
 cli = [
-    "aiohttp",
+    "aiohttp>=3.14.4",
     "aiomultiprocess",
     "atomicwrites",
     "beautifulsoup4==4.12.3",
