@@ -9,7 +9,7 @@ dependencies = [
   "mkdocs-redirects~=1.2.1",
   "mkdocs-glightbox~=0.3.4",
   "mkdocs-pdf-export-plugin~=0.5.10",
-  "weasyprint~=56.1.0",
+  "weasyprint~=70.0",
   # Extensions
   "mkdocs-click~=0.8.0",
   "pymdown-extensions~=10.3.0",
